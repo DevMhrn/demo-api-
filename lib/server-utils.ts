@@ -7,11 +7,9 @@ export async function downloadDatabaseCSVs(): Promise<{
   files: string[];
 }> {
   try {
-    // Ensure the db directory exists
+    // Path to db directory (must exist in repo)
     const dbDir = path.join(process.cwd(), 'db');
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true });
-    }
+    // Do not try to create dbDir at runtime
 
     // List of expected CSV files
     const expectedFiles = [
