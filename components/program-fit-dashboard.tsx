@@ -64,8 +64,8 @@ export function ProgramFitDashboard() {
     if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
       try {
         new Notification(title, {
-          body: message,
-          icon: "/favicon.ico"
+          body: message
+          // Removed the icon property that was causing 404 errors
         })
         playNotificationSound()
         return true
