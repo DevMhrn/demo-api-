@@ -5,8 +5,8 @@ import Papa from 'papaparse';
 import { LearnerInfo } from '@/types';
 
 // Paths to CSV files
-const LEARNER_CSV_PATH = path.join(process.cwd(), 'db', 'FTUE_Onboarding_Form_V2.csv');
-const TRANSCRIPT_CSV_PATH = path.join(process.cwd(), 'db', 'Recording_and_Transcript_Link.csv');
+const LEARNER_CSV_PATH = path.join(process.cwd(), 'public/db', 'FTUE_Onboarding_Form_V2.csv');
+const TRANSCRIPT_CSV_PATH = path.join(process.cwd(), 'public/db', 'Recording_and_Transcript_Link.csv');
 
 // Get learner info from CSV based on email (streaming version)
 export async function getLearnerInfoFromCSV(email: string): Promise<LearnerInfo | null> {

@@ -109,15 +109,16 @@ const FormControl = React.forwardRef<
 >(({ ...props }, ref) => {
   const { error, formItemId, formDescriptionId, formMessageId } = useFormField()
 
+  // Always set aria-describedby, even if empty
+  const describedBy = error
+    ? `${formDescriptionId} ${formMessageId}`.trim()
+    : `${formDescriptionId}`.trim()
+
   return (
     <Slot
       ref={ref}
       id={formItemId}
-      aria-describedby={
-        !error
-          ? `${formDescriptionId}`
-          : `${formDescriptionId} ${formMessageId}`
-      }
+      aria-describedby={describedBy || undefined}
       aria-invalid={!!error}
       {...props}
     />
