@@ -4,6 +4,34 @@ import { createReadStream } from 'fs';
 import Papa from 'papaparse';
 import { LearnerInfo } from '@/types';
 
+// Define interfaces for CSV data structure
+interface LearnerCSVData {
+  email?: string;
+  learner_email?: string;
+  'Full Name'?: string;
+  batch_name?: string;
+  'Total Experience in months'?: string;
+  'Current Job Role'?: string;
+  Current_Company?: string;
+  'Current CTC'?: string;
+  Current_CTC?: string;
+  CurrentCTC?: string;
+  current_ctc?: string;
+  'Academic Specialisation'?: string;
+  'Programming/Shell Scripting Proficiency'?: string;
+  'DSA/Devops Proficiency'?: string;
+  'SQL Proficiency'?: string;
+  [key: string]: any; // Allow for other fields
+}
+
+interface TranscriptCSVData {
+  learner_email?: string;
+  transcript_s3_link?: string;
+  call_log_id?: string;
+  call_done_at?: string;
+  [key: string]: any; // Allow for other fields
+}
+
 // Paths to CSV files - both using the same public/db directory
 const LEARNER_CSV_PATH = path.join(process.cwd(), 'public', 'FTUE_Onboarding_Form_V2.csv');
 const TRANSCRIPT_CSV_PATH = path.join(process.cwd(), 'public', 'Recording_and_Transcript_Link.csv');
@@ -22,7 +50,7 @@ export async function getLearnerInfoFromCSV(email: string): Promise<LearnerInfo 
     Papa.parse(csvStream, {
       header: true,
       step: function(row) {
-        const learnerData = row.data;
+        const learnerData = row.data as LearnerCSVData;
         if (
           learnerData.email?.toLowerCase() === emailLower ||
           learnerData.learner_email?.toLowerCase() === emailLower
@@ -79,15 +107,16 @@ export async function getTranscriptLinksFromCSV(email: string): Promise<any[]> {
       header: true,
       step: function(row) {
         // Process one row at a time
+        const rowData = row.data as TranscriptCSVData;
         if (
-          row.data.learner_email?.toLowerCase() === emailLower && 
-          row.data.transcript_s3_link && 
-          row.data.transcript_s3_link.trim() !== ''
+          rowData.learner_email?.toLowerCase() === emailLower && 
+          rowData.transcript_s3_link && 
+          rowData.transcript_s3_link.trim() !== ''
         ) {
           results.push({
-            link: row.data.transcript_s3_link,
-            callId: row.data.call_log_id || 'unknown',
-            callDate: row.data.call_done_at || new Date().toISOString()
+            link: rowData.transcript_s3_link,
+            callId: rowData.call_log_id || 'unknown',
+            callDate: rowData.call_done_at || new Date().toISOString()
           });
         }
       },
