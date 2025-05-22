@@ -7,8 +7,8 @@ export async function downloadDatabaseCSVs(): Promise<{
   files: string[];
 }> {
   try {
-    // Path to db directory (must exist in repo)
-    const dbDir = path.join(process.cwd(), 'db');
+    // Path to db directory in public folder
+    const dbDir = path.join(process.cwd(), 'public');
     // Do not try to create dbDir at runtime
 
     // List of expected CSV files
@@ -24,7 +24,7 @@ export async function downloadDatabaseCSVs(): Promise<{
 
     return {
       success: true,
-      message: 'CSV database files are ready (accessed from db folder)',
+      message: 'CSV database files are ready (accessed from public/db folder)',
       files: presentFiles
     };
   } catch (error) {
