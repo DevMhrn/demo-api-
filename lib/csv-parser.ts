@@ -14,7 +14,9 @@ export async function getLearnerInfoFromCSV(email: string): Promise<LearnerInfo 
     let found = false;
     let result: LearnerInfo | null = null;
     const emailLower = email.toLowerCase();
-
+    console.log('Searching for email:', emailLower);
+    console.log('CSV Path:', LEARNER_CSV_PATH);
+    console.log("Transcript CSV Path:", TRANSCRIPT_CSV_PATH);
     const csvStream = createReadStream(LEARNER_CSV_PATH, { encoding: 'utf8' });
 
     Papa.parse(csvStream, {
