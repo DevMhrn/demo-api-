@@ -7,9 +7,8 @@ export async function downloadDatabaseCSVs(): Promise<{
   files: string[];
 }> {
   try {
-    // Path to db directory in public folder
-    const dbDir = path.join(process.cwd(), 'public');
-    // Do not try to create dbDir at runtime
+    // Path to public directory where CSV files are stored
+    const publicDir = path.join(process.cwd(), 'public');
 
     // List of expected CSV files
     const expectedFiles = [
@@ -17,14 +16,14 @@ export async function downloadDatabaseCSVs(): Promise<{
       "Recording_and_Transcript_Link.csv"
     ];
 
-    // Check which expected files are present in the db directory
+    // Check which expected files are present in the public directory
     const presentFiles = expectedFiles.filter(filename =>
-      fs.existsSync(path.join(dbDir, filename))
+      fs.existsSync(path.join(publicDir, filename))
     );
 
     return {
       success: true,
-      message: 'CSV database files are ready (accessed from public/db folder)',
+      message: 'CSV database files are ready (accessed from public folder)',
       files: presentFiles
     };
   } catch (error) {

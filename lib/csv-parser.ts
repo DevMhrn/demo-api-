@@ -4,101 +4,116 @@ import { createReadStream } from 'fs';
 import Papa from 'papaparse';
 import { LearnerInfo } from '@/types';
 
-// Paths to CSV files - both using the same public/db directory
-const LEARNER_CSV_PATH = path.join(process.cwd(), 'public', 'FTUE_Onboarding_Form_V2.csv');
-const TRANSCRIPT_CSV_PATH = path.join(process.cwd(), 'public', 'Recording_and_Transcript_Link.csv');
+// In serverless environments, we need to use a different approach
+const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
 
-// Get learner info from CSV based on email (streaming version)
+// Helper function to read CSV files that works in both environments
+async function readCSV(filename: string): Promise<string> {
+  if (isServerless) {
+    // For serverless: fetch the file using node-fetch
+    const fetch = (await import('node-fetch')).default;
+    const baseUrl = process.env.VERCEL_URL ? 
+      `https://${process.env.VERCEL_URL}` : 
+      process.env.BASE_URL || 'http://localhost:3000';
+    
+    const response = await fetch(`${baseUrl}/${filename}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${filename}: ${response.statusText}`);
+    }
+    return await response.text();
+  } else {
+    // For local development: read from filesystem
+    const filePath = path.join(process.cwd(), 'public', filename);
+    return fs.readFileSync(filePath, 'utf8');
+  }
+}
+
+// Get learner info from CSV based on email
 export async function getLearnerInfoFromCSV(email: string): Promise<LearnerInfo | null> {
-  return new Promise((resolve, reject) => {
-    let found = false;
-    let result: LearnerInfo | null = null;
+  try {
     const emailLower = email.toLowerCase();
     console.log('Searching for email:', emailLower);
-    console.log('CSV Path:', LEARNER_CSV_PATH);
-    console.log("Transcript CSV Path:", TRANSCRIPT_CSV_PATH);
-    const csvStream = createReadStream(LEARNER_CSV_PATH, { encoding: 'utf8' });
-
-    Papa.parse(csvStream, {
+    
+    const csvContent = await readCSV('FTUE_Onboarding_Form_V2.csv');
+    let result: LearnerInfo | null = null;
+    
+    // Parse the CSV content
+    Papa.parse(csvContent, {
       header: true,
-      step: function(row) {
-        const learnerData = row.data;
-        if (
-          learnerData.email?.toLowerCase() === emailLower ||
-          learnerData.learner_email?.toLowerCase() === emailLower
-        ) {
-          // Handle different column name variations for Current CTC
-          const currentCTC =
-            learnerData['Current CTC'] ||
-            learnerData.Current_CTC ||
-            learnerData.CurrentCTC ||
-            learnerData.current_ctc ||
-            null;
+      complete: function(results) {
+        for (const row of results.data) {
+          const learnerData = row;
+          if (
+            learnerData.email?.toLowerCase() === emailLower ||
+            learnerData.learner_email?.toLowerCase() === emailLower
+          ) {
+            // Handle different column name variations for Current CTC
+            const currentCTC =
+              learnerData['Current CTC'] ||
+              learnerData.Current_CTC ||
+              learnerData.CurrentCTC ||
+              learnerData.current_ctc ||
+              null;
 
-          result = {
-            email,
-            program: learnerData.batch_name || null,
-            yearsOfExperience: learnerData['Total Experience in months']
-              ? Math.floor(parseInt(learnerData['Total Experience in months']) / 12)
-              : null,
-            currentCompany: learnerData.Current_Company || learnerData['Current Job Role'] || null,
-            currentCTC: currentCTC,
-            currentDesignation: learnerData['Current Job Role'] || null,
-            fullName: learnerData['Full Name'] || null,
-            academicSpecialisation: learnerData['Academic Specialisation'] || null,
-            programmingProficiency: learnerData['Programming/Shell Scripting Proficiency'] || null,
-            dsaProficiency: learnerData['DSA/Devops Proficiency'] || null,
-            sqlProficiency: learnerData['SQL Proficiency'] || null,
-          };
-          found = true;
-          // Stop parsing by returning false instead of using this.abort()
-          return false;
+            result = {
+              email,
+              program: learnerData.batch_name || null,
+              yearsOfExperience: learnerData['Total Experience in months']
+                ? Math.floor(parseInt(learnerData['Total Experience in months']) / 12)
+                : null,
+              currentCompany: learnerData.Current_Company || learnerData['Current Job Role'] || null,
+              currentCTC: currentCTC,
+              currentDesignation: learnerData['Current Job Role'] || null,
+              fullName: learnerData['Full Name'] || null,
+              academicSpecialisation: learnerData['Academic Specialisation'] || null,
+              programmingProficiency: learnerData['Programming/Shell Scripting Proficiency'] || null,
+              dsaProficiency: learnerData['DSA/Devops Proficiency'] || null,
+              sqlProficiency: learnerData['SQL Proficiency'] || null,
+            };
+            break;
+          }
         }
-      },
-      complete: function() {
-        resolve(result);
-      },
-      error: function(error) {
-        console.error('Error streaming learner CSV:', error);
-        reject(new Error('Failed to process learner data'));
       }
     });
-  });
+
+    return result;
+  } catch (error) {
+    console.error('Error processing learner CSV:', error);
+    throw new Error('Failed to process learner data');
+  }
 }
 
 // Get transcript links from CSV based on email
 export async function getTranscriptLinksFromCSV(email: string): Promise<any[]> {
-  return new Promise((resolve, reject) => {
-    const results: any[] = [];
+  try {
     const emailLower = email.toLowerCase();
+    const csvContent = await readCSV('Recording_and_Transcript_Link.csv');
+    const results: any[] = [];
     
-    // Create read stream instead of loading entire file
-    const csvStream = createReadStream(TRANSCRIPT_CSV_PATH, { encoding: 'utf8' });
-    
-    Papa.parse(csvStream, {
+    // Parse the CSV content
+    Papa.parse(csvContent, {
       header: true,
-      step: function(row) {
-        // Process one row at a time
-        if (
-          row.data.learner_email?.toLowerCase() === emailLower && 
-          row.data.transcript_s3_link && 
-          row.data.transcript_s3_link.trim() !== ''
-        ) {
-          results.push({
-            link: row.data.transcript_s3_link,
-            callId: row.data.call_log_id || 'unknown',
-            callDate: row.data.call_done_at || new Date().toISOString()
-          });
+      complete: function(parseResults) {
+        for (const row of parseResults.data) {
+          if (
+            row.learner_email?.toLowerCase() === emailLower && 
+            row.transcript_s3_link && 
+            row.transcript_s3_link.trim() !== ''
+          ) {
+            results.push({
+              link: row.transcript_s3_link,
+              callId: row.call_log_id || 'unknown',
+              callDate: row.call_done_at || new Date().toISOString()
+            });
+          }
         }
-      },
-      complete: function() {
-        resolve(results);
-      },
-      error: function(error) {
-        console.error('Error streaming transcript CSV:', error);
-        reject(new Error('Failed to process transcript data'));
       }
     });
-  });
+    
+    return results;
+  } catch (error) {
+    console.error('Error processing transcript CSV:', error);
+    throw new Error('Failed to process transcript data');
+  }
 }
 
