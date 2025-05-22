@@ -9,7 +9,8 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(400).json({ error: 'Invalid filename' });
   }
 
-  const filePath = path.join(process.cwd(), 'db', filename);
+  // Updated to look in public directory instead of db
+  const filePath = path.join(process.cwd(), 'public', filename);
   
   try {
     if (!fs.existsSync(filePath)) {
