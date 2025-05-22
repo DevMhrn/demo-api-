@@ -80,13 +80,13 @@ export async function getS3Content(s3UrlData: { link: string; callId: string; ca
       callDate,
       content: bodyContents
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching from S3:', error);
     // Return error in content rather than throwing to avoid breaking the flow
     return {
       callId: s3UrlData.callId,
       callDate: s3UrlData.callDate,
-      content: `Error fetching transcript: ${error.message}`
+      content: `Error fetching transcript: ${error instanceof Error ? error.message : String(error)}`
     };
   }
 }
