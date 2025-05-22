@@ -86,19 +86,19 @@ export async function analyzeWithOpenAI(
     // Define program evaluation criteria
     const evaluationCriteria = `
 ### Program Fit Evaluation Criteria:
-1. Technical Background: Does the learner have the required technical knowledge for the program?
-2. Experience Level: Is the learner's work experience appropriate for the program?
-3. Career Goals: Do the learner's goals align with the program outcomes?
-4. Learning Style: Is the program's teaching approach compatible with the learner?
-5. Time Commitment: Can the learner commit the required time for the program?
-6. Previous Performance: How has the learner performed in similar contexts?
+1. Learning Need: Does the learner lack knowledge in this field and would genuinely benefit from the program? Higher need = better fit.
+2. Knowledge Gaps: Does the learner have significant gaps in technical knowledge that this program addresses? More gaps = better fit.
+3. Career Transition Potential: Is the learner trying to enter or transition within this field? Stronger transition goals = better fit.
+4. Growth Opportunity: Will the program significantly accelerate the learner's career growth? Higher potential impact = better fit.
+5. Time Commitment Ability: Can the learner commit the required time for the program?
+6. Motivation: Does the learner show genuine interest and motivation to learn the program content?
 
-Please evaluate each criterion separately before making your final determination.
+IMPORTANT: A learner is considered a GOOD FIT if they NEED the program the most, not if they are already qualified.
 `;
 
     // Create improved prompt with both learner info and transcripts
     const prompt = `
-Analyze if this learner is a good fit for their current program based on the following information:
+Analyze if this learner NEEDS this program and would benefit significantly from it based on the following information:
 
 ## Learner Information
 - Full Name: ${learnerInfo.fullName || 'Not provided'}
@@ -118,13 +118,13 @@ ${transcriptSummaries}
 
 Based on the above information, please follow this structured analysis:
 
-1. Transcript Analysis: Summarize the key points from the transcripts that relate to program fit.
-2. Technical Assessment: Evaluate the learner's technical skills relative to program requirements.
-3. Experience Assessment: Analyze if the learner's experience level is appropriate for the program.
-4. Career Alignment: Determine if the program aligns with the learner's career goals.
-5. Concerns: Identify any concerns or potential misalignments.
-6. Recommended Program: If not a good fit, suggest a more suitable program based on their profile.
-7. Final Determination: Make a clear yes/no decision on program fit with clear reasoning.
+1. Transcript Analysis: Identify key points showing the learner's knowledge gaps and learning needs.
+2. Skills Assessment: Evaluate the learner's current skills and identify what they're missing that the program provides.
+3. Career Transition Analysis: Assess if the learner is trying to enter a new field or significantly advance in their current one.
+4. Learning Impact: Determine how much the program would impact the learner's career trajectory.
+5. Potential Challenges: Identify any potential barriers to the learner's success in the program.
+6. Recommended Program: If a different program would better address their specific needs, suggest it.
+7. Final Determination: Make a clear yes/no decision on program fit based on how much they NEED the program, not how qualified they already are.
 
 Format your response as a JSON object with the following structure:
 {
@@ -141,7 +141,7 @@ Format your response as a JSON object with the following structure:
       messages: [
         {
           role: 'system', 
-          content: 'You are an educational program advisor that makes objective, data-driven assessments about learner fit for programs based on their background and transcripts. You must be consistent in your evaluations using the same criteria across all assessments.'
+          content: 'You are an educational program advisor that assesses how much a learner NEEDS and would BENEFIT from a program. A perfect candidate is someone who has GAPS in their knowledge that the program can fill, NOT someone who is already skilled in the area. Someone with little to no experience in the field who is motivated to learn is an IDEAL FIT. Someone who already has significant experience or skills in the program\'s focus area is NOT a good fit as they don\'t need the program. Be consistent in prioritizing candidates who would be transformed the most by the program.'
         },
         {
           role: 'user', 
