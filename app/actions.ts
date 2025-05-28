@@ -277,8 +277,9 @@ export async function generateInsightsAction(
     
     // Generate sales insights using existing OpenAI function
     console.log(`Generating sales insights using ${similarLearnersWithTranscripts.length} learners' data`);
+    let timeNow = new Date().toISOString();
     const analysis = await generateSalesInsights(targetInfo, similarLearnersWithTranscripts);
-    
+    console.log(Date.now() - new Date(timeNow).getTime(), "ms to generate insights");
     return {
       targetEmail: email,
       status: 'complete',

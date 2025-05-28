@@ -255,6 +255,7 @@ export async function generateSalesInsights(
   similarLearnersData: SimilarLearnerData[]
 ): Promise<SalesInsightAnalysis> {
   try {
+
     // ENHANCED: Clean all transcripts before analysis
     const cleanedSimilarLearnersData = similarLearnersData.map(learner => ({
       ...learner,
@@ -364,7 +365,7 @@ IMPORTANT:
 `;
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
