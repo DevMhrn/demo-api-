@@ -61,18 +61,31 @@ export function SalesInsightsDashboard() {
     setEvaluation(null)
 
     try {
-      // Step 1: Fetch target learner info
+      // Step 1: Fetch target learner info (25% progress)
       setProgress(25)
+      setEvaluation({
+        targetEmail,
+        status: 'loading',
+        loadingStage: 'fetchingTarget'
+      })
+      
       const targetResult = await fetchTargetLearnerAction(targetEmail)
       setEvaluation(targetResult)
       
       if (targetResult.status === 'error') {
         setIsSubmitting(false)
+        setProgress(100)
         return
       }
 
-      // Step 2: Find similar learners
+      // Step 2: Find similar learners (50% progress)
       setProgress(50)
+      setEvaluation(prev => prev ? {
+        ...prev,
+        status: 'loading',
+        loadingStage: 'findingSimilar'
+      } : targetResult)
+      
       const similarResult = await fetchSimilarLearnersAction(
         targetEmail, 
         targetResult.targetInfo, 
@@ -86,8 +99,25 @@ export function SalesInsightsDashboard() {
         return
       }
 
-      // Step 3: Generate insights
+      // Step 3: Fetch transcripts and generate insights (75% progress)
       setProgress(75)
+      setEvaluation(prev => prev ? {
+        ...prev,
+        status: 'loading',
+        loadingStage: 'fetchingTranscripts'
+      } : similarResult)
+      
+      // Small delay to show the transcript fetching stage
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Update to analyzing stage (90% progress)
+      setProgress(90)
+      setEvaluation(prev => prev ? {
+        ...prev,
+        status: 'loading',
+        loadingStage: 'analyzing'
+      } : similarResult)
+      
       const finalResult = await generateInsightsAction(
         targetEmail,
         similarResult.targetInfo,
@@ -182,7 +212,7 @@ export function SalesInsightsDashboard() {
 
           {evaluation && (
             <div className="space-y-6">
-              {isSubmitting && <LoadingIndicator progress={progress} />}
+              {isSubmitting && <LoadingIndicator progress={progress} context="insights" />}
               <InsightResults evaluation={evaluation} />
             </div>
           )}

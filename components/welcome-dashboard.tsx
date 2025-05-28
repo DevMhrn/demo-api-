@@ -15,7 +15,8 @@ export function WelcomeDashboard() {
       description: "Analyze learner profiles and call transcripts to determine program suitability",
       icon: GraduationCap,
       route: "/program-fit",
-      color: "bg-blue-50 border-blue-200 hover:bg-blue-100"
+      color: "bg-blue-50 border-blue-200 hover:bg-blue-100",
+      disabled: false,
     },
     {
       title: "Analytics & Reports",
@@ -23,24 +24,9 @@ export function WelcomeDashboard() {
       icon: BarChart3,
       route: "/insights",
       color: "bg-purple-50 border-purple-200 hover:bg-purple-100",
+      disabled: false,
     },
-    {
-      title: "Learner Management",
-      description: "Manage learner information and profiles",
-      icon: Users,
-      route: "/learners",
-      color: "bg-green-50 border-green-200 hover:bg-green-100",
-      disabled: true
-    },
-    
-    {
-      title: "System Settings",
-      description: "Configure system preferences and AI model settings",
-      icon: Settings,
-      route: "/settings",
-      color: "bg-orange-50 border-orange-200 hover:bg-orange-100",
-      disabled: true
-    }
+
   ]
 
   const handleNavigation = (route: string, disabled?: boolean) => {
@@ -54,7 +40,7 @@ export function WelcomeDashboard() {
       {/* Welcome Header */}
       <div className="text-center space-y-4">
         <h1 className="text-4xl font-bold text-gray-900">
-          Welcome to Program Fit Evaluator 🎓
+          Welcome to V0 Tools 🎓
         </h1>
         <p className="text-xl text-gray-600 max-w-2xl mx-auto">
           Analyze learner profiles and call transcripts to determine the best program fit using AI-powered insights
@@ -111,7 +97,7 @@ export function WelcomeDashboard() {
       <div className="bg-gray-50 rounded-lg p-6 max-w-2xl mx-auto">
         <h3 className="text-lg font-semibold mb-3 text-center">🚀 Ready to Get Started?</h3>
         <p className="text-gray-600 text-center">
-          Click on "Evaluate Program Fit" to analyze learner profiles and determine the best program matches using our AI-powered evaluation system.
+          Click on specific cards to determine the best program matches for the candidates using our AI-powered evaluation system.
         </p>
       </div>
     </div>

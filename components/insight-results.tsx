@@ -23,21 +23,23 @@ export function InsightResults({ evaluation }: InsightResultsProps) {
     switch (loadingStage) {
       case "fetchingTarget":
         message = "Fetching target learner data...";
-        detail = "Retrieving learner profile information";
+        detail = "Retrieving learner profile information from database";
         break;
       case "findingSimilar":
         message = "Finding similar learners...";
         detail = "Searching for learners with matching Academic Specialization and Job Role";
         break;
       case "fetchingTranscripts":
-        message = "Fetching call transcripts...";
-        detail = "Downloading and processing call transcripts from similar learners";
+        message = "Downloading call transcripts...";
+        detail = "Retrieving and processing conversation data from similar learners";
         break;
       case "analyzing":
-        message = "Generating sales insights...";
-        detail = "Using AI to analyze patterns and generate sales strategies";
+        message = "Analyzing data and generating insights...";
+        detail = "Using AI to analyze patterns and create sales strategies";
         break;
       default:
+        message = "Processing request...";
+        detail = "Please wait while we process your request";
         break;
     }
 
