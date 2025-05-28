@@ -194,7 +194,7 @@ export function SalesInsightsDashboard() {
                   min="1"
                   max="50"
                   value={maxSimilarLearners}
-                  onChange={(e) => setMaxSimilarLearners(parseInt(e.target.value) || 10)}
+                  onChange={(e) => setMaxSimilarLearners(Math.max(1, parseInt(e.target.value) || 1))}
                   className="w-full"
                   disabled={isSubmitting || !isDbReady}
                 />
