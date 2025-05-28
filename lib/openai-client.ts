@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
-import { LearnerInfo } from '@/types';
-import { summarizeTranscript } from './transcript-cleaner';
+import { LearnerInfo, SimilarLearnerData, SalesInsightAnalysis } from '@/types';
+import { summarizeTranscript, cleanTranscript } from './transcript-cleaner';
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -186,4 +186,306 @@ Format your response as a JSON object with the following structure:
     console.error('Error analyzing with OpenAI:', error);
     throw new Error('Failed to analyze learner fit with OpenAI');
   }
+}
+
+/**
+ * Estimates token count (rough approximation: 1 token ≈ 4 characters)
+ */
+function estimateTokenCount(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Truncates transcript to fit within token limits while preserving key information
+ */
+function truncateTranscript(transcript: string, maxLength: number = 2000): string {
+  if (transcript.length <= maxLength) return transcript;
+  
+  // Take first 40% and last 40% of transcript, skip middle
+  const firstPart = transcript.substring(0, Math.floor(maxLength * 0.4));
+  const lastPart = transcript.substring(transcript.length - Math.floor(maxLength * 0.4));
+  
+  return `${firstPart}\n\n[... middle section truncated for length ...]\n\n${lastPart}`;
+}
+
+/**
+ * Processes learner data to fit within token constraints
+ */
+async function preprocessLearnerData(
+  similarLearnersData: SimilarLearnerData[], 
+  maxTokensPerLearner: number = 1500
+): Promise<string> {
+  const processedLearners = await Promise.all(
+    similarLearnersData.map(async (learner, index) => {
+      let processedTranscript = learner.cleanedTranscription || '';
+      
+      // Clean and truncate if needed
+      if (processedTranscript.length > maxTokensPerLearner * 4) {
+        // For very long transcripts, use AI summarization first
+        if (processedTranscript.length > 4000) {
+          try {
+            processedTranscript = await summarizeWithOpenAI(processedTranscript);
+          } catch (error) {
+            console.warn(`Failed to summarize transcript for ${learner.email}, using truncation`);
+            processedTranscript = truncateTranscript(processedTranscript, maxTokensPerLearner * 4);
+          }
+        } else {
+          processedTranscript = truncateTranscript(processedTranscript, maxTokensPerLearner * 4);
+        }
+      }
+
+      return `
+CONVERSATION ${index + 1} - EMAIL: ${learner.email}
+Profile: ${learner.info.academicSpecialisation || 'Unknown'} | ${learner.info.currentDesignation || 'Unknown'} | ${learner.info.yearsOfExperience || 'Unknown'} years exp
+
+TRANSCRIPT:
+${processedTranscript}
+---`;
+    })
+  );
+
+  return processedLearners.join('\n\n');
+}
+
+/**
+ * Analyzes ALL learner transcripts collectively to provide comprehensive sales insights
+ */
+export async function generateSalesInsights(
+  targetLearner: LearnerInfo,
+  similarLearnersData: SimilarLearnerData[]
+): Promise<SalesInsightAnalysis> {
+  try {
+    // ENHANCED: Clean all transcripts before analysis
+    const cleanedSimilarLearnersData = similarLearnersData.map(learner => ({
+      ...learner,
+      cleanedTranscription: cleanTranscript(learner.cleanedTranscription || '')
+    }));
+
+    // Check if we need to chunk the data
+    const maxContextTokens = 120000; // Leave buffer for response
+    const maxInputTokens = 100000; // Conservative limit for input
+    
+    // Estimate total tokens needed
+    let totalEstimatedTokens = 0;
+    for (const learner of cleanedSimilarLearnersData) {
+      totalEstimatedTokens += estimateTokenCount(learner.cleanedTranscription);
+    }
+
+    let comprehensiveAnalysis: string;
+    
+    if (totalEstimatedTokens > maxInputTokens) {
+      console.log(`Large dataset detected (${totalEstimatedTokens} estimated tokens). Using preprocessing...`);
+      
+      // For large datasets, process in chunks or use summarization
+      if (cleanedSimilarLearnersData.length > 20) {
+        // If too many learners, take a representative sample
+        const sampleSize = 15;
+        const sampledLearners = cleanedSimilarLearnersData
+          .sort(() => 0.5 - Math.random())
+          .slice(0, sampleSize);
+        
+        comprehensiveAnalysis = await preprocessLearnerData(sampledLearners, 1000);
+        console.log(`Using sample of ${sampleSize} learners from ${cleanedSimilarLearnersData.length} total`);
+      } else {
+        // Process all learners but with heavy summarization
+        comprehensiveAnalysis = await preprocessLearnerData(cleanedSimilarLearnersData, 800);
+      }
+    } else {
+      // Small dataset, process normally but with light preprocessing
+      comprehensiveAnalysis = await preprocessLearnerData(cleanedSimilarLearnersData, 2000);
+    }
+
+    // Verify final token count
+    const finalTokenCount = estimateTokenCount(comprehensiveAnalysis);
+    console.log(`Final analysis token count: ${finalTokenCount}`);
+    
+    if (finalTokenCount > maxInputTokens) {
+      throw new Error(`Content still too large after preprocessing: ${finalTokenCount} tokens`);
+    }
+
+    const prompt = `
+You are analyzing ${cleanedSimilarLearnersData.length} sales conversations from prospects with similar profiles to help create a winning sales strategy.
+
+CONVERSATION DATA:
+${comprehensiveAnalysis}
+
+Provide practical sales insights in this exact format:
+
+## EXECUTIVE SUMMARY
+Write 2-3 paragraphs explaining the key insights discovered from analyzing all these conversations. Focus on what makes these prospects tick and how to approach them effectively.
+
+## PROSPECT PSYCHOLOGY 
+Write 2-3 short paragraphs explaining the common mindset, fears, and motivations you found across these conversations. Include specific behavioral patterns.
+
+## WINNING SALES STRATEGIES
+Provide 5-7 specific strategies that work with this type of prospect. For each strategy, write:
+**Strategy Name:** [Clear strategy name]
+**How to Execute:** [2-3 sentences explaining exactly how to do this]
+**Why It Works:** [1-2 sentences explaining the psychology behind it]
+**Conversation Example:** [A specific quote from the transcripts that shows this strategy in action]
+
+## COMMON OBJECTIONS & RESPONSES
+List 4-6 common objections found in the conversations. For each objection:
+**What They Say:** [Exact quote from transcript showing how prospects phrase this objection]
+**How to Respond:** [Specific recommended response that addresses their concern]
+**Follow-up Strategy:** [What to say next to keep the conversation moving forward]
+
+## CONVERSATION EXAMPLES
+Provide 3-4 specific examples from the transcripts showing:
+**What the Prospect Said:** [Direct quote from conversation]
+**Recommended Response:** [Exactly what a salesperson should say in response]
+**Why This Works:** [Brief explanation of the psychology]
+
+## LEARNER SPECIFIC EXAMPLES
+For each learner email, provide specific examples in this exact format:
+**Learner Email:** [exact email from the conversation data]
+**What They Said:** [Direct quote from their specific transcript]
+**Recommended Response:** [Exactly what you should say to this specific learner]
+**Context:** [Brief explanation of why this response works for this learner]
+
+## COMPETITIVE INSIGHTS
+Write 2-3 paragraphs about:
+- What alternatives prospects mentioned and why
+- What made them choose us vs competitors
+- How to position against competition based on actual conversations
+
+## RED FLAGS TO WATCH FOR
+List 3-5 warning signs found in conversations that indicate a prospect won't convert, with specific examples from transcripts.
+
+## TIMING & FOLLOW-UP STRATEGIES
+Write 2-3 paragraphs about optimal timing for different conversation elements and follow-up strategies based on the conversation patterns you observed.
+
+IMPORTANT: 
+- Use actual quotes from the transcripts throughout
+- Keep explanations practical and actionable
+- Focus on psychology and human behavior
+- Provide word-for-word response recommendations
+- Base everything on patterns found across multiple conversations
+`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a master sales strategist analyzing real prospect conversations. Provide practical, actionable insights with specific examples from transcripts. Focus on psychology, proven strategies, and exact conversation techniques that work. Pay special attention to mapping specific learner emails to their exact quotes and personalized responses.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 4000
+    });
+
+    const content = response.choices[0].message.content;
+    console.log('OpenAI sales insights response:', content);
+    
+    if (!content) {
+      throw new Error('No response content from OpenAI');
+    }
+
+    // Parse the structured response into sections
+    const sections = {
+      executiveSummary: extractSection(content, 'EXECUTIVE SUMMARY'),
+      prospectPsychology: extractSection(content, 'PROSPECT PSYCHOLOGY'),
+      winningStrategies: extractSection(content, 'WINNING SALES STRATEGIES'),
+      objections: extractSection(content, 'COMMON OBJECTIONS & RESPONSES'),
+      conversationExamples: extractSection(content, 'CONVERSATION EXAMPLES'),
+      learnerSpecificExamples: extractSection(content, 'LEARNER SPECIFIC EXAMPLES'),
+      competitiveInsights: extractSection(content, 'COMPETITIVE INSIGHTS'),
+      redFlags: extractSection(content, 'RED FLAGS TO WATCH FOR'),
+      timingStrategies: extractSection(content, 'TIMING & FOLLOW-UP STRATEGIES')
+    };
+
+    // Extract key patterns and recommendations from the structured response
+    const keyPatterns = extractListItems(sections.prospectPsychology || '');
+    const salesRecommendations = extractListItems(sections.winningStrategies || '');
+    const exampleResponses = extractLearnerSpecificExamples(sections.learnerSpecificExamples || '');
+
+    return {
+      targetEmail: `Dataset Analysis (${similarLearnersData.length} conversations)`,
+      similarLearnersCount: similarLearnersData.length,
+      insights: content, // Full structured response
+      keyPatterns,
+      salesRecommendations,
+      exampleResponses,
+      // Structured sections for better UI rendering
+      executiveSummary: sections.executiveSummary,
+      prospectPsychology: sections.prospectPsychology,
+      winningStrategies: sections.winningStrategies,
+      objections: sections.objections,
+      conversationExamples: sections.conversationExamples,
+      learnerSpecificExamples: sections.learnerSpecificExamples,
+      competitiveInsights: sections.competitiveInsights,
+      redFlags: sections.redFlags,
+      timingStrategies: sections.timingStrategies
+    };
+
+  } catch (error) {
+    console.error('Error generating sales insights with OpenAI:', error);
+    
+    // Enhanced error handling
+    if (error instanceof Error && error.message.includes('context_length_exceeded')) {
+      throw new Error(`Dataset too large for analysis. Please try with fewer learners or contact support. (${similarLearnersData.length} learners processed)`);
+    }
+    
+    throw new Error('Failed to generate sales insights with OpenAI');
+  }
+}
+
+// Helper function to extract sections from the response
+function extractSection(content: string, sectionTitle: string): string {
+  const regex = new RegExp(`## ${sectionTitle}\\s*([\\s\\S]*?)(?=## |$)`, 'i');
+  const match = content.match(regex);
+  return match ? match[1].trim() : '';
+}
+
+// Helper function to extract list items from text
+function extractListItems(text: string): string[] {
+  const lines = text.split('\n').filter(line => line.trim());
+  return lines.slice(0, 5); // Return first 5 key points
+}
+
+// Helper function to extract learner-specific examples
+function extractLearnerSpecificExamples(text: string): Array<{email: string, response: string, context: string}> {
+  const examples: Array<{email: string, response: string, context: string}> = [];
+  const lines = text.split('\n').filter(line => line.trim());
+  
+  let currentExample: Partial<{email: string, quote: string, response: string, context: string}> = {};
+  
+  for (const line of lines) {
+    if (line.includes('Learner Email:')) {
+      // If we have a complete example, save it
+      if (currentExample.email && currentExample.quote && currentExample.response) {
+        examples.push({
+          email: currentExample.email,
+          response: currentExample.response,
+          context: `Quote: "${currentExample.quote}" | Context: ${currentExample.context || 'No context provided'}`
+        });
+      }
+      // Start new example
+      currentExample = { 
+        email: line.replace(/.*Learner Email:\s*/, '').trim() 
+      };
+    } else if (line.includes('What They Said:')) {
+      currentExample.quote = line.replace(/.*What They Said:\s*/, '').replace(/"/g, '').trim();
+    } else if (line.includes('Recommended Response:')) {
+      currentExample.response = line.replace(/.*Recommended Response:\s*/, '').replace(/"/g, '').trim();
+    } else if (line.includes('Context:')) {
+      currentExample.context = line.replace(/.*Context:\s*/, '').trim();
+    }
+  }
+  
+  // Add the last example if complete
+  if (currentExample.email && currentExample.quote && currentExample.response) {
+    examples.push({
+      email: currentExample.email,
+      response: currentExample.response,
+      context: `Quote: "${currentExample.quote}" | Context: ${currentExample.context || 'No context provided'}`
+    });
+  }
+  
+  return examples;
 }

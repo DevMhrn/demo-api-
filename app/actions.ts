@@ -1,7 +1,8 @@
 "use server"
 
-import { fetchLearnerInfo, fetchLearnerTranscripts, analyzeProgramFit } from "@/lib/api-service"
-import type { LearnerEvaluation, LoadingStage } from "@/types"
+import { fetchLearnerInfo, fetchLearnerTranscripts, analyzeProgramFit, findSimilarLearners, fetchMultipleLearnerTranscripts } from "@/lib/api-service"
+import { generateSalesInsights } from "@/lib/openai-client"
+import type { LearnerEvaluation, LoadingStage, InsightEvaluation, SimilarLearnerData } from "@/types"
 
 import { downloadDatabaseCSVs } from "@/lib/server-utils";
 /**
@@ -149,4 +150,150 @@ export async function getEvaluationState(email: string, stage: LoadingStage): Pr
 
 export async function initializeDatabaseAction() {
   return await downloadDatabaseCSVs();
+}
+
+/**
+ * Fetch target learner info for insights
+ */
+export async function fetchTargetLearnerAction(email: string): Promise<InsightEvaluation> {
+  try {
+    const targetInfo = await fetchLearnerInfo(email);
+    
+    return {
+      targetEmail: email,
+      status: 'loading',
+      loadingStage: 'findingSimilar',
+      targetInfo,
+    };
+  } catch (error) {
+    console.error(`Error fetching target learner ${email}:`, error);
+    return {
+      targetEmail: email,
+      status: 'error',
+      error: error instanceof Error ? error.message : "Failed to fetch target learner info"
+    };
+  }
+}
+
+/**
+ * Find similar learners and fetch their transcripts
+ */
+export async function fetchSimilarLearnersAction(
+  email: string, 
+  targetInfo: any, 
+  maxCount: number = 10
+): Promise<InsightEvaluation> {
+  try {
+    console.log(`Finding similar learners for ${email} with Academic: ${targetInfo.academicSpecialisation}, Job: ${targetInfo.currentDesignation}`);
+    
+    // Find similar learners using existing function
+    const similarLearners = await findSimilarLearners(targetInfo, maxCount);
+    
+    console.log(`Found ${similarLearners.length} similar learners`);
+    
+    if (similarLearners.length === 0) {
+      return {
+        targetEmail: email,
+        status: 'complete',
+        targetInfo,
+        similarLearners: [],
+        analysis: {
+          targetEmail: email,
+          similarLearnersCount: 0,
+          insights: `No similar learners found with matching Academic Specialization (${targetInfo.academicSpecialisation || 'N/A'}) or Job Role (${targetInfo.currentDesignation || 'N/A'}).`,
+          keyPatterns: [],
+          salesRecommendations: [],
+          exampleResponses: []
+        }
+      };
+    }
+    
+    return {
+      targetEmail: email,
+      status: 'loading',
+      loadingStage: 'fetchingTranscripts',
+      targetInfo,
+      similarLearners: similarLearners.map(learner => ({
+        email: learner.email,
+        cleanedTranscription: '',
+        info: learner
+      }))
+    };
+  } catch (error) {
+    console.error(`Error finding similar learners for ${email}:`, error);
+    return {
+      targetEmail: email,
+      status: 'error',
+      targetInfo,
+      error: error instanceof Error ? error.message : "Failed to find similar learners"
+    };
+  }
+}
+
+/**
+ * Fetch transcripts for similar learners and generate insights
+ */
+export async function generateInsightsAction(
+  email: string,
+  targetInfo: any,
+  similarLearners: SimilarLearnerData[]
+): Promise<InsightEvaluation> {
+  try {
+    console.log(`Fetching transcripts for ${similarLearners.length} similar learners`);
+    
+    // Fetch transcripts for all similar learners using existing function
+    const transcriptMap = await fetchMultipleLearnerTranscripts(
+      similarLearners.map(sl => sl.info)
+    );
+    
+    console.log(`Retrieved transcripts for ${transcriptMap.size} learners`);
+    
+    // Update similar learners with their transcripts
+    const similarLearnersWithTranscripts: SimilarLearnerData[] = similarLearners
+      .map(learner => ({
+        ...learner,
+        cleanedTranscription: transcriptMap.get(learner.email) || ''
+      }))
+      .filter(learner => learner.cleanedTranscription.length > 50); // Only include learners with substantial transcripts
+    
+    console.log(`${similarLearnersWithTranscripts.length} learners have usable transcripts`);
+    
+    if (similarLearnersWithTranscripts.length === 0) {
+      return {
+        targetEmail: email,
+        status: 'complete',
+        targetInfo,
+        similarLearners: [],
+        analysis: {
+          targetEmail: email,
+          similarLearnersCount: 0,
+          insights: "No transcripts found for similar learners to analyze. The similar learners found do not have call transcript data available.",
+          keyPatterns: [],
+          salesRecommendations: [],
+          exampleResponses: []
+        }
+      };
+    }
+    
+    // Generate sales insights using existing OpenAI function
+    console.log(`Generating sales insights using ${similarLearnersWithTranscripts.length} learners' data`);
+    const analysis = await generateSalesInsights(targetInfo, similarLearnersWithTranscripts);
+    
+    return {
+      targetEmail: email,
+      status: 'complete',
+      targetInfo,
+      similarLearners: similarLearnersWithTranscripts,
+      analysis
+    };
+  } catch (error) {
+    console.error(`Error generating insights for ${email}:`, error);
+    return {
+      targetEmail: email,
+      status: 'error',
+      targetInfo,
+      similarLearners,
+      error: error instanceof Error ? error.message : "Failed to generate sales insights"
+    };
+  }
 }

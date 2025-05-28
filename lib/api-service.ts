@@ -147,3 +147,144 @@ export async function analyzeProgramFit(
     throw error;
   }
 }
+
+// Find similar learners based on Academic Specialization and Job Role
+export async function findSimilarLearners(
+  targetInfo: LearnerInfo, 
+  maxCount: number = 10
+): Promise<LearnerInfo[]> {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const Papa = await import('papaparse');
+    
+    const LEARNER_CSV_PATH = path.join(process.cwd(), 'public', 'FTUE_Onboarding_Form_V2.csv');
+    
+    return new Promise((resolve, reject) => {
+      const similarLearners: LearnerInfo[] = [];
+      const targetAcademic = targetInfo.academicSpecialisation?.toLowerCase().trim() || '';
+      const targetJobRole = targetInfo.currentDesignation?.toLowerCase().trim() || '';
+      
+      console.log(`Finding similar learners for: Academic="${targetAcademic}", JobRole="${targetJobRole}"`);
+      
+      if (!targetAcademic && !targetJobRole) {
+        console.log('No Academic Specialization or Job Role provided for matching');
+        resolve([]);
+        return;
+      }
+      
+      const csvStream = fs.createReadStream(LEARNER_CSV_PATH, { encoding: 'utf8' });
+      
+      Papa.parse(csvStream, {
+        header: true,
+        step: function(row) {
+          const learnerData = row.data as any;
+          const email = learnerData.email || learnerData.learner_email;
+          
+          if (!email || email.toLowerCase() === targetInfo.email.toLowerCase()) {
+            return; // Skip target email or empty emails
+          }
+          
+          const academic = (learnerData['Academic Specialisation'] || '').toLowerCase().trim();
+          const jobRole = (learnerData['Current Job Role'] || '').toLowerCase().trim();
+          
+          // Exact match or contains match for both fields
+          let academicMatch = false;
+          let jobRoleMatch = false;
+          
+          if (targetAcademic && academic) {
+            academicMatch = academic === targetAcademic || 
+                           academic.includes(targetAcademic) || 
+                           targetAcademic.includes(academic);
+          }
+          
+          if (targetJobRole && jobRole) {
+            jobRoleMatch = jobRole === targetJobRole || 
+                          jobRole.includes(targetJobRole) || 
+                          targetJobRole.includes(jobRole);
+          }
+          
+          // Both should match for better similarity
+          if ((academicMatch && jobRoleMatch) || 
+              (academicMatch && !targetJobRole) || 
+              (jobRoleMatch && !targetAcademic)) {
+            
+            if (similarLearners.length < maxCount) {
+              const currentCTC = learnerData['Current CTC'] || 
+                               learnerData.Current_CTC || 
+                               learnerData.CurrentCTC || 
+                               learnerData.current_ctc || null;
+              
+              const learnerInfo: LearnerInfo = {
+                email: email,
+                program: learnerData.batch_name || null,
+                yearsOfExperience: learnerData['Total Experience in months']
+                  ? Math.floor(parseInt(learnerData['Total Experience in months']) / 12)
+                  : null,
+                currentCompany: learnerData.Current_Company || null,
+                currentCTC: currentCTC,
+                currentDesignation: learnerData['Current Job Role'] || null,
+                fullName: learnerData['Full Name'] || null,
+                academicSpecialisation: learnerData['Academic Specialisation'] || null,
+                programmingProficiency: learnerData['Programming/Shell Scripting Proficiency'] || null,
+                dsaProficiency: learnerData['DSA/Devops Proficiency'] || null,
+                sqlProficiency: learnerData['SQL Proficiency'] || null,
+              };
+              
+              similarLearners.push(learnerInfo);
+              console.log(`Found similar learner: ${email} (Academic: ${academic}, Job: ${jobRole})`);
+            }
+          }
+        },
+        complete: function() {
+          console.log(`Found ${similarLearners.length} similar learners`);
+          resolve(similarLearners);
+        },
+        error: function(error) {
+          console.error('Error finding similar learners:', error);
+          reject(new Error('Failed to find similar learners'));
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error in findSimilarLearners:', error);
+    throw error;
+  }
+}
+
+// Fetch transcripts for multiple learners and return map
+export async function fetchMultipleLearnerTranscripts(
+  learners: LearnerInfo[]
+): Promise<Map<string, string>> {
+  try {
+    const transcriptMap = new Map<string, string>();
+    
+    // Process all learners in parallel
+    const transcriptPromises = learners.map(async (learner) => {
+      try {
+        const transcriptData = await fetchLearnerTranscripts(learner.email);
+        
+        // Combine all transcripts for this learner
+        const combinedTranscript = transcriptData.transcripts
+          .map(t => t.content)
+          .filter(content => content && content.length > 0)
+          .join('\n\n--- Next Call ---\n\n');
+        
+        if (combinedTranscript) {
+          transcriptMap.set(learner.email, combinedTranscript);
+        }
+        
+        return { email: learner.email, success: true };
+      } catch (error) {
+        console.error(`Failed to fetch transcripts for ${learner.email}:`, error);
+        return { email: learner.email, success: false };
+      }
+    });
+    
+    await Promise.all(transcriptPromises);
+    return transcriptMap;
+  } catch (error) {
+    console.error('Error fetching multiple transcripts:', error);
+    throw error;
+  }
+}
