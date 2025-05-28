@@ -17,12 +17,12 @@
   "functions": {
     "app/api/**/*": {
       "memory": 1024,
-      "maxDuration": 60,
+      "maxDuration": 300,
       "includeFiles": "public/*.csv"
     },
     "pages/api/**/*": {
       "memory": 1024,
-      "maxDuration": 60,
+      "maxDuration": 300,
       "includeFiles": "public/*.csv"
     }
   },
